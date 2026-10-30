@@ -1,6 +1,7 @@
 const puppeteer = require('puppeteer');
 
 async function checkBills() {
+    console.time('وقت التنفيذ الإجمالي');
     const browser = await puppeteer.launch({
         headless: true,
         args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -9,17 +10,16 @@ async function checkBills() {
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
     
-    console.log('جاري فتح صفحة موقع شركة الكهرباء...');
-    await page.goto('https://www.se.com.sa/ar-SA/GuestViewBill', { waitUntil: 'networkidle2', timeout: 60000 });
+    // فتح الصفحة وتسريع التحميل بتخطي الملفات غير الضرورية
+    await page.goto('https://www.se.com.sa/ar-SA/GuestViewBill', { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-    console.log('جاري الانتظار لحين ظهور حقل إدخال رقم الحساب...');
-    await page.waitForSelector('input', { visible: true, timeout: 30000 });
+    // الانتظار الفوري لحين ظهور حقل الإدخال
+    await page.waitForSelector('input', { visible: true, timeout: 15000 });
 
     const accountNumber = '30025850573';
-    await page.type('input', accountNumber, { delay: 100 });
-    console.log('تم إدخال رقم الحساب بنجاح.');
+    await page.type('input', accountNumber, { delay: 50 });
 
-    // النقر على زر البحث
+    // النقر على زر البحث مباشرة
     await page.evaluate(() => {
         const buttons = Array.from(document.querySelectorAll('button, a, div[role="button"]'));
         const targetBtn = buttons.find(b => b.innerText && (b.innerText.includes('استمر') || b.innerText.includes('عرض') || b.innerText.includes('بحث')));
@@ -30,29 +30,24 @@ async function checkBills() {
         }
     });
 
-    console.log('تم النقر على زر البحث، جاري انتظار تحميل بيانات الفاتورة...');
+    console.log('جاري جلب الفاتورة بذكاء...');
 
     try {
-        // الانتظار حتى يتغير محتوى الصفحة أو يظهر الجدول
-        await new Promise(resolve => setTimeout(resolve, 8000)); // انتظار 8 ثوانٍ لتحميل البيانات بالكامل
+        // الانتظار الذكي: أول ما تظهر كلمة "ريال" أو أي نتيجة في الصفحة يقرأها فوراً بدون انتظار أوقات ثابتة
+        await page.waitForFunction(() => document.body.innerText.includes('ريال') || document.body.innerText.includes('المبلغ'), { timeout: 10000 });
         
-        // استخراج جميع النصوص المرتبطة بالمبالغ أو الفاتورة
-        const pageText = await page.evaluate(() => {
-            // جلب أي عناصر تحتوي على ارقام أو مبالغ أو جدول
-            const elements = Array.from(document.querySelectorAll('td, span, div, p'));
-            return elements
-                .map(el => el.innerText ? el.innerText.trim() : '')
-                .filter(text => text.includes('ريال') || text.includes('المبلغ') || text.includes('إجمالي') || /^\d+(\.\d+)?$/.test(text));
-        });
+        const bodyText = await page.evaluate(() => document.body.innerText);
 
         console.log(`========================================`);
         console.log(`رقم الحساب: ${accountNumber}`);
-        console.log(`النتائج المستخرجة من الصفحة:`, JSON.stringify(pageText.slice(0, 20), null, 2));
+        console.log(`تم جلب النتيجة بنجاح!`);
+        console.log(bodyText.substring(0, 800)); // عرض المختصر المفيد من النصوص الظاهرة
         console.log(`========================================`);
     } catch (e) {
-        console.log('حدث خطأ أثناء جلب البيانات.');
+        console.log('انتهت المهلة، يرجى التحقق.');
     }
 
+    console.timeEnd('وقت التنفيذ الإجمالي');
     await browser.close();
 }
 
