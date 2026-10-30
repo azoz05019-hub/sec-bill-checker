@@ -10,16 +10,16 @@ async function checkBills() {
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
     
-    // فتح الصفحة وتسريع التحميل بتخطي الملفات غير الضرورية
+    // فتح الصفحة
     await page.goto('https://www.se.com.sa/ar-SA/GuestViewBill', { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-    // الانتظار الفوري لحين ظهور حقل الإدخال
+    // الانتظار لحين ظهور حقل الإدخال
     await page.waitForSelector('input', { visible: true, timeout: 15000 });
 
     const accountNumber = '30025850573';
     await page.type('input', accountNumber, { delay: 50 });
 
-    // النقر على زر البحث مباشرة
+    // النقر على زر البحث
     await page.evaluate(() => {
         const buttons = Array.from(document.querySelectorAll('button, a, div[role="button"]'));
         const targetBtn = buttons.find(b => b.innerText && (b.innerText.includes('استمر') || b.innerText.includes('عرض') || b.innerText.includes('بحث')));
@@ -30,22 +30,19 @@ async function checkBills() {
         }
     });
 
-    console.log('جاري جلب الفاتورة بذكاء...');
+    console.log('تم النقر، جاري منح الصفحة 15 ثانية لتكتمل استجابة الخادم...');
+    
+    // انتظار ثابت كافي جداً لتكتمل استجابة موقع الـ Angular بغض النظر عن الشروط
+    await new Promise(resolve => setTimeout(resolve, 15000));
 
-    try {
-        // الانتظار الذكي: أول ما تظهر كلمة "ريال" أو أي نتيجة في الصفحة يقرأها فوراً بدون انتظار أوقات ثابتة
-        await page.waitForFunction(() => document.body.innerText.includes('ريال') || document.body.innerText.includes('المبلغ'), { timeout: 10000 });
-        
-        const bodyText = await page.evaluate(() => document.body.innerText);
+    // سحب كافة النصوص الموجودة في الصفحة وطباعتها لنرى تفاصيل الفاتورة
+    const bodyText = await page.evaluate(() => document.body.innerText);
 
-        console.log(`========================================`);
-        console.log(`رقم الحساب: ${accountNumber}`);
-        console.log(`تم جلب النتيجة بنجاح!`);
-        console.log(bodyText.substring(0, 800)); // عرض المختصر المفيد من النصوص الظاهرة
-        console.log(`========================================`);
-    } catch (e) {
-        console.log('انتهت المهلة، يرجى التحقق.');
-    }
+    console.log(`========================================`);
+    console.log(`رقم الحساب: ${accountNumber}`);
+    console.log(`محتوى الصفحة الفعلي بعد الانتظار:`);
+    console.log(bodyText.substring(0, 1200)); // طباعة أول 1200 حرف لرؤية المبلغ أو حالة الفاتورة
+    console.log(`========================================`);
 
     console.timeEnd('وقت التنفيذ الإجمالي');
     await browser.close();
