@@ -13,34 +13,49 @@ async function checkBills() {
     await page.goto('https://www.se.com.sa/ar-SA/GuestViewBill', { waitUntil: 'networkidle2', timeout: 60000 });
 
     console.log('جاري الانتظار لحين ظهور حقل إدخال رقم الحساب...');
-    // الانتظار حتى تظهر أي خانة إدخال في الصفحة
     await page.waitForSelector('input', { visible: true, timeout: 30000 });
 
     const accountNumber = '30025850573';
     
-    // إدخال رقم الحساب في خانة الإدخال المتاحة
+    // إدخال رقم الحساب
     await page.type('input', accountNumber, { delay: 100 });
     console.log('تم إدخال رقم الحساب بنجاح.');
 
-    // محاولة الضغط على زر الاستمرار أو العرض
+    // النقر على زر "استمر" أو "عرض الفاتورة" بطريقة تفاعلية صحيحة
     await page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll('button, a, div'));
+        const buttons = Array.from(document.querySelectorAll('button, a, div[role="button"]'));
         const targetBtn = buttons.find(b => b.innerText && (b.innerText.includes('استمر') || b.innerText.includes('عرض') || b.innerText.includes('بحث')));
-        if (targetBtn) targetBtn.click();
+        if (targetBtn) {
+            targetBtn.click();
+        } else {
+            // كخيار بديل إذا لم يجد النص تماماً، يضغط على أول زر رئيسي
+            const mainBtn = document.querySelector('button');
+            if (mainBtn) mainBtn.click();
+        }
     });
 
-    // الانتظار قليلاً لجلب النتيجة
+    console.log('تم النقر على زر البحث، جاري انتظار تحميل بيانات الفاتورة...');
+
+    // الانتظار لفترة كافية لتحميل بيانات الجدول واشتراط ظهور خانة إجمالي الفاتورة
     try {
-        await page.waitForFunction(() => document.body.innerText.includes('إجمالي') || document.body.innerText.includes('المبلغ'), { timeout: 15000 });
+        // الانتظار حتى ظهور عنصر المبلغ الإجمالي في الصفحة
+        await page.waitForSelector('td.cdk-column-totalBill, .total-bill, span', { timeout: 25000 });
         
+        // استخراج القيمة وطباعتها
         const totalBill = await page.evaluate(() => {
-            const el = document.querySelector('td.cdk-column-totalBill .value') || document.querySelector('.total-bill');
-            return el ? el.innerText.trim() : 'تم تجاوز صفحة الإدخال بنجاح';
+            // محاولة البحث عن العنصر المخصص لإجمالي الفاتورة
+            const totalEl = document.querySelector('td.cdk-column-totalBill .value') || 
+                            document.querySelector('.total-bill') ||
+                            document.querySelector('td.cdk-column-totalBill');
+            return totalEl ? totalEl.innerText.trim() : 'لم يتم العثور على العنصر المستهدف بدقة';
         });
 
-        console.log(`رقم الحساب: ${accountNumber} - النتيجة: ${totalBill}`);
+        console.log(`========================================`);
+        console.log(`رقم الحساب: ${accountNumber}`);
+        console.log(`إجمالي الفاتورة: ${totalBill}`);
+        console.log(`========================================`);
     } catch (e) {
-        console.log('تمت العملية ولكن حدث تجاوز لمهلة انتظار الجدول.');
+        console.log('انتهت مهلة الانتظار ولم يظهر جدول الفاتورة، يرجى التحقق من صحة رقم الحساب.');
     }
 
     await browser.close();
